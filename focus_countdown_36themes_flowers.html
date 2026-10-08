@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>专注倒计时</title>
+<style>
+    * { box-sizing: border-box; }
+
+    :root {
+        --text: rgba(255,255,255,.94);
+        --sub: rgba(255,255,255,.62);
+        --glass: rgba(255,255,255,.10);
+        --glass-border: rgba(255,255,255,.16);
+        --shadow: rgba(0,0,0,.28);
+    }
+
+    html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+        color: var(--text);
+        background: #111827;
+    }
+
+    body {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+            radial-gradient(circle at 50% 42%, rgba(255,255,255,.10), transparent 34%),
+            radial-gradient(circle at 15% 20%, rgba(255,255,255,.08), transparent 28%),
+            linear-gradient(135deg, var(--bg1, #111827), var(--bg2, #182332) 48%, var(--bg3, #101720));
+        transition: background 7s ease-in-out;
+    }
+
+    /* 柔和的背景光 */
+    body::before {
+        content: "";
+        position: fixed;
+        inset: -30%;
+        background:
+            radial-gradient(circle at 30% 30%, rgba(255,220,190,.06), transparent 22%),
+            radial-gradient(circle at 70% 65%, rgba(160,200,255,.06), transparent 24%);
+        animation: breathe 10s ease-in-out infinite alternate;
+        pointer-events: none;
+    }
+
+    @keyframes breathe {
+        from { transform: scale(1); opacity: .7; }
+        to { transform: scale(1.08); opacity: 1; }
+    }
+
+    /* 背景色会随时间缓慢切换，保持低饱和、适合长时间学习 */
+    body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 75% 25%, rgba(255,255,255,.035), transparent 24%),
+            radial-gradient(circle at 25% 75%, rgba(255,255,255,.025), transparent 28%);
+        z-index: 0;
+    }
+
+    .page {
+        position: relative;
+        z-index: 5;
+        width: min(900px, 92vw);
+        text-align: center;
+        user-select: none;
+    }
+
+    .record {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 48px;
+        padding: 10px 24px;
+        border: 1px solid var(--glass-border);
+        border-radius: 999px;
+        background: rgba(255,255,255,.07);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: 0 12px 35px var(--shadow);
+        font-size: 18px;
+        letter-spacing: .08em;
+        color: var(--sub);
+    }
+
+    .record strong {
+        color: var(--text);
+        font-weight: 500;
+        letter-spacing: .04em;
+    }
+
+    .record .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #b7d5c1;
+        box-shadow: 0 0 12px rgba(183,213,193,.8);
+    }
+
+    .timer {
+        margin: 62px 0 42px;
+        cursor: pointer;
+        transition: transform .25s ease, filter .25s ease;
+    }
+
+    .timer:hover {
+        transform: scale(1.012);
+        filter: brightness(1.08);
+    }
+
+    .timer:active {
+        transform: scale(.995);
+    }
+
+    #countdown {
+        display: block;
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+        font-size: clamp(92px, 16vw, 180px);
+        line-height: .9;
+        font-weight: 200;
+        letter-spacing: .025em;
+        text-shadow:
+            0 3px 30px rgba(0,0,0,.28),
+            0 0 50px rgba(220,235,245,.07);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .hint {
+        margin-top: 27px;
+        font-size: 13px;
+        color: rgba(255,255,255,.36);
+        letter-spacing: .18em;
+    }
+
+    .clock {
+        font-size: 15px;
+        color: rgba(255,255,255,.57);
+        letter-spacing: .18em;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* 飘落花朵层：不再使用羽毛 */
+    #particles {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .particle {
+        position: absolute;
+        top: -80px;
+        left: 0;
+        width: 26px;
+        height: 26px;
+        opacity: 0;
+        animation: fall linear forwards;
+        will-change: transform, opacity;
+    }
+
+    .flower {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        filter: blur(.15px);
+    }
+
+    .flower-petal {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: var(--petal-w);
+        height: var(--petal-h);
+        margin-left: calc(var(--petal-w) / -2);
+        margin-top: calc(var(--petal-h) / -2);
+        border-radius: 75% 75% 48% 48%;
+        background: var(--flower-color);
+        box-shadow: 0 1px 8px var(--flower-glow);
+        transform-origin: 50% 50%;
+        transform: rotate(var(--angle)) translateY(calc(var(--flower-radius) * -1));
+    }
+
+    .flower-center {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: var(--center-size);
+        height: var(--center-size);
+        margin: calc(var(--center-size) / -2);
+        border-radius: 50%;
+        background: var(--center-color);
+        box-shadow: 0 0 9px var(--center-glow);
+    }
+
+    @keyframes fall {
+        0% {
+            transform: translate3d(0, -80px, 0) rotate(0deg);
+            opacity: 0;
+        }
+        8% { opacity: var(--opacity); }
+        50% {
+            transform: translate3d(var(--drift), 55vh, 0) rotate(var(--rotate));
+        }
+        100% {
+            transform: translate3d(calc(var(--drift) * -0.35), 115vh, 0) rotate(calc(var(--rotate) * -1));
+            opacity: 0;
+        }
+    }
+
+    /* 遮罩 */
+    .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(5,9,14,.48);
+        backdrop-filter: blur(9px);
+        -webkit-backdrop-filter: blur(9px);
+        padding: 20px;
+    }
+
+    .overlay.show {
+        display: flex;
+        animation: fadeIn .18s ease-out;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .modal {
+        width: min(430px, 92vw);
+        padding: 32px 30px 28px;
+        border: 1px solid rgba(255,255,255,.18);
+        border-radius: 26px;
+        background: rgba(30,39,49,.88);
+        box-shadow: 0 28px 80px rgba(0,0,0,.48);
+        text-align: center;
+        transform: translateY(8px);
+        animation: modalIn .22s ease-out forwards;
+    }
+
+    @keyframes modalIn {
+        to { transform: translateY(0); }
+    }
+
+    .modal h2 {
+        margin: 0;
+        font-size: 23px;
+        font-weight: 400;
+        letter-spacing: .08em;
+    }
+
+    .status {
+        margin: 11px 0 26px;
+        color: rgba(255,255,255,.52);
+        font-size: 14px;
+    }
+
+    .select-wrap {
+        position: relative;
+        margin-bottom: 22px;
+    }
+
+    select {
+        width: 100%;
+        appearance: none;
+        border: 1px solid rgba(255,255,255,.15);
+        border-radius: 14px;
+        padding: 15px 46px 15px 18px;
+        background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.9);
+        font-size: 16px;
+        outline: none;
+        cursor: pointer;
+    }
+
+    select:focus {
+        border-color: rgba(255,255,255,.35);
+    }
+
+    select option {
+        background: #26313c;
+        color: white;
+    }
+
+    .select-wrap::after {
+        content: "⌄";
+        position: absolute;
+        right: 18px;
+        top: 12px;
+        font-size: 20px;
+        color: rgba(255,255,255,.55);
+        pointer-events: none;
+    }
+
+    .buttons {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+
+    button {
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 13px;
+        padding: 13px 8px;
+        background: rgba(255,255,255,.08);
+        color: rgba(255,255,255,.9);
+        font-size: 15px;
+        cursor: pointer;
+        transition: background .18s, transform .15s, border-color .18s;
+    }
+
+    button:hover {
+        background: rgba(255,255,255,.14);
+        border-color: rgba(255,255,255,.22);
+    }
+
+    button:active { transform: scale(.97); }
+
+    .start {
+        background: rgba(172,202,184,.18);
+        border-color: rgba(190,220,200,.25);
+    }
+
+    .end {
+        background: rgba(218,180,180,.11);
+    }
+
+    .clear {
+        color: rgba(255,255,255,.62);
+    }
+
+    .modal-note {
+        margin-top: 19px;
+        font-size: 12px;
+        color: rgba(255,255,255,.30);
+        line-height: 1.7;
+    }
+
+    /* 运行状态 */
+    body.running #countdown {
+        text-shadow:
+            0 3px 30px rgba(0,0,0,.28),
+            0 0 60px rgba(200,225,210,.11);
+    }
+
+    body.finished #countdown {
+        animation: finishedPulse 1.2s ease-in-out infinite alternate;
+    }
+
+    @keyframes finishedPulse {
+        from { opacity: .7; }
+        to { opacity: 1; }
+    }
+
+    @media (max-width: 600px) {
+        .record {
+            font-size: 15px;
+            padding: 9px 18px;
+        }
+
+        .timer {
+            margin: 70px 0 40px;
+        }
+
+        #countdown {
+            font-size: clamp(68px, 20vw, 120px);
+        }
+    }
+</style>
+</head>
+
+<body>
+<div id="particles"></div>
+
+<main class="page">
+    <div class="record">
+        <span class="dot"></span>
+        <span>今日专注</span>
+        <strong id="totalStudy">00:00:00</strong>
+    </div>
+
+    <div class="timer" id="timerButton" title="点击打开倒计时设置">
+        <span id="countdown">02:00:00</span>
+        <div class="hint">点击倒计时设置</div>
+    </div>
+
+    <div class="clock" id="clock">00:00:00</div>
+</main>
+
+<div class="overlay" id="overlay">
+    <section class="modal" role="dialog" aria-modal="true">
+        <h2>专注倒计时</h2>
+        <div class="status" id="statusText">当前暂停中</div>
+
+        <div class="select-wrap">
+            <select id="durationSelect" aria-label="选择倒计时时间"></select>
+        </div>
+
+        <div class="buttons">
+            <button class="start" id="startBtn">开始</button>
+            <button class="end" id="endBtn">结束</button>
+            <button class="clear" id="clearBtn">清零</button>
+        </div>
+
+        <div class="modal-note">
+            运行中的时间会自动计入上方「今日专注」。
+        </div>
+    </section>
+</div>
+
+<script>
+(() => {
+    const countdownEl = document.getElementById("countdown");
+    const totalEl = document.getElementById("totalStudy");
+    const clockEl = document.getElementById("clock");
+    const overlay = document.getElementById("overlay");
+    const timerButton = document.getElementById("timerButton");
+    const select = document.getElementById("durationSelect");
+    const statusText = document.getElementById("statusText");
+    const particles = document.getElementById("particles");
+
+    // 1～10小时
+    for (let h = 1; h <= 10; h++) {
+        const option = document.createElement("option");
+        option.value = h * 3600;
+        option.textContent = `${h} 小时`;
+        select.appendChild(option);
+    }
+    select.value = 7200;
+
+    let remaining = 7200;
+    let totalStudy = Number(localStorage.getItem("focus_total") || 0);
+    let running = false;
+    let lastTick = null;
+    let rafId = null;
+
+    function format(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = sec % 60;
+        return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
+    }
+
+    function update() {
+        countdownEl.textContent = format(remaining);
+        totalEl.textContent = format(totalStudy);
+    }
+
+    function updateClock() {
+        const now = new Date();
+        clockEl.textContent = now.toLocaleTimeString("zh-CN", {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        });
+    }
+
+    function save() {
+        localStorage.setItem("focus_total", String(Math.floor(totalStudy)));
+        localStorage.setItem("focus_remaining", String(Math.floor(remaining)));
+        localStorage.setItem("focus_duration", select.value);
+    }
+
+    function tick(timestamp) {
+        if (!running) return;
+
+        if (lastTick === null) lastTick = timestamp;
+        const delta = (timestamp - lastTick) / 1000;
+        lastTick = timestamp;
+
+        // 按实际经过的时间累计，避免浏览器切后台时产生大量误差
+        if (delta > 0) {
+            const used = Math.min(delta, remaining);
+
+            remaining -= used;
+            totalStudy += used;
+
+            if (remaining <= 0.001) {
+                remaining = 0;
+                running = false;
+                document.body.classList.remove("running");
+                document.body.classList.add("finished");
+                statusText.textContent = "当前已结束";
+                lastTick = null;
+                alert("本轮专注完成。");
+            }
+
+            save();
+            update();
+        }
+
+        if (running) rafId = requestAnimationFrame(tick);
+    }
+
+    function start() {
+        if (remaining <= 0) {
+            remaining = Number(select.value);
+        }
+
+        running = true;
+        document.body.classList.add("running");
+        document.body.classList.remove("finished");
+        statusText.textContent = "当前专注中";
+        lastTick = null;
+
+        cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(tick);
+        save();
+        update();
+    }
+
+    function end() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        lastTick = null;
+        document.body.classList.remove("running");
+        document.body.classList.remove("finished");
+        statusText.textContent = "当前暂停中";
+        save();
+        update();
+    }
+
+    function clearAll() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        lastTick = null;
+
+        remaining = Number(select.value);
+        totalStudy = 0;
+
+        document.body.classList.remove("running", "finished");
+        statusText.textContent = "当前暂停中";
+
+        localStorage.removeItem("focus_total");
+        localStorage.setItem("focus_remaining", String(remaining));
+        localStorage.setItem("focus_duration", select.value);
+
+        update();
+    }
+
+    document.getElementById("startBtn").addEventListener("click", start);
+    document.getElementById("endBtn").addEventListener("click", end);
+    document.getElementById("clearBtn").addEventListener("click", clearAll);
+
+    timerButton.addEventListener("click", () => {
+        overlay.classList.add("show");
+        statusText.textContent = running ? "当前专注中" : (remaining === 0 ? "当前已结束" : "当前暂停中");
+        select.value = String(Math.max(3600, Math.min(36000, Math.round(remaining / 3600) * 3600)));
+    });
+
+    // 点击遮罩空白处关闭
+    overlay.addEventListener("click", e => {
+        if (e.target === overlay) overlay.classList.remove("show");
+    });
+
+    document.addEventListener("keydown", e => {
+        if (e.key === "Escape") overlay.classList.remove("show");
+    });
+
+    select.addEventListener("change", () => {
+        if (!running) {
+            remaining = Number(select.value);
+            document.body.classList.remove("finished");
+            statusText.textContent = "当前暂停中";
+            save();
+            update();
+        }
+    });
+
+    // 恢复上次状态
+    const savedDuration = Number(localStorage.getItem("focus_duration"));
+    const savedRemaining = Number(localStorage.getItem("focus_remaining"));
+
+    if (savedDuration >= 3600 && savedDuration <= 36000) {
+        select.value = String(savedDuration);
+        if (savedRemaining > 0 && savedRemaining <= savedDuration) {
+            remaining = savedRemaining;
+        } else {
+            remaining = savedDuration;
+        }
+    }
+
+    update();
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    /*
+     * 36种背景主题：
+     * 1～18：明亮色调
+     * 19～36：暗淡色调
+     * 06:00～17:59 使用明亮组
+     * 18:00～05:59 使用暗淡组
+     * 每2分钟切换一次。
+     */
+    const brightThemes = [
+        ["#A9DDF5", "#DDF3FC", "#82C8E8"],
+        ["#A9E6D0", "#DDF6EA", "#7FD2B2"],
+        ["#B9CFF7", "#E6EEFF", "#91ADEE"],
+        ["#F0BED8", "#FBE3EF", "#D993B9"],
+        ["#F4C7AE", "#FBE8D8", "#E6A47F"],
+        ["#F1DF9F", "#FCF4D1", "#D9C66E"],
+        ["#C9E9A9", "#E8F6D8", "#A1D17D"],
+        ["#A9E4E0", "#DDF7F5", "#7BCFC8"],
+        ["#A9DCEB", "#DDF3F8", "#78C4D9"],
+        ["#B6D8F5", "#E2F0FD", "#8BBCEB"],
+        ["#CCD8F5", "#E8EEFC", "#A7B9E7"],
+        ["#D2CEF0", "#ECEAFA", "#ABA4DF"],
+        ["#DEC3EE", "#F2E5FA", "#BD91D8"],
+        ["#EFC6D9", "#FAE6EF", "#D99DBB"],
+        ["#F4C3C1", "#FBE4E1", "#E69A96"],
+        ["#F1D6B5", "#FAECDD", "#D9AF7C"],
+        ["#DDE0AE", "#F1F2D3", "#BFC46E"],
+        ["#B9E0B9", "#E2F3DF", "#88C68B"]
+    ];
+
+    const darkThemes = [
+        ["#263E4B", "#38586A", "#1B2D37"],
+        ["#253E36", "#3A5B4E", "#1A2B25"],
+        ["#303A5A", "#48577D", "#202A43"],
+        ["#4B3041", "#674458", "#32202D"],
+        ["#513A2C", "#6C5040", "#36261E"],
+        ["#514A2C", "#6B633D", "#37331E"],
+        ["#30482E", "#466343", "#202F20"],
+        ["#21464A", "#35656A", "#173237"],
+        ["#244452", "#3A6270", "#193039"],
+        ["#2C4057", "#455E79", "#1D2C3E"],
+        ["#373D59", "#515A79", "#252A40"],
+        ["#403A5B", "#5A5277", "#2C2840"],
+        ["#4B3558", "#684A76", "#32233D"],
+        ["#523645", "#704D5D", "#37242E"],
+        ["#553635", "#734B49", "#392424"],
+        ["#51422F", "#6E5A40", "#362C20"],
+        ["#4B482E", "#66633E", "#30301F"],
+        ["#304935", "#46644B", "#202F24"]
+    ];
+
+    const themeInterval = 120000;
+    let themeIndex = 0;
+    let currentThemeGroup = null;
+
+    function isBrightTime(date = new Date()) {
+        const hour = date.getHours();
+        return hour >= 6 && hour < 18;
+    }
+
+    function getThemeGroup() {
+        return isBrightTime() ? brightThemes : darkThemes;
+    }
+
+    function applyBackgroundTheme(theme) {
+        document.documentElement.style.setProperty("--bg1", theme[0]);
+        document.documentElement.style.setProperty("--bg2", theme[1]);
+        document.documentElement.style.setProperty("--bg3", theme[2]);
+    }
+
+    function applyTimeTheme(resetIndex = false) {
+        const group = getThemeGroup();
+
+        if (resetIndex || currentThemeGroup !== group) {
+            currentThemeGroup = group;
+            themeIndex = 0;
+        }
+
+        applyBackgroundTheme(group[themeIndex]);
+    }
+
+    applyTimeTheme(true);
+
+    // 每2分钟切换一个色调；跨越06:00/18:00时自动切换到对应明亮/暗淡组。
+    setInterval(() => {
+        const group = getThemeGroup();
+
+        if (group !== currentThemeGroup) {
+            currentThemeGroup = group;
+            themeIndex = 0;
+        } else {
+            themeIndex = (themeIndex + 1) % group.length;
+        }
+
+        applyBackgroundTheme(group[themeIndex]);
+    }, themeInterval);
+
+    /*
+     * 不同数量花瓣的花朵：
+     * 每朵花随机5～9片花瓣，不再生成羽毛。
+     */
+    const flowerColors = {
+        bright: [
+            ["rgba(255,220,235,.68)", "rgba(255,242,178,.86)"],
+            ["rgba(220,245,255,.68)", "rgba(255,231,181,.86)"],
+            ["rgba(225,245,218,.68)", "rgba(255,231,210,.86)"],
+            ["rgba(238,220,255,.68)", "rgba(255,239,184,.86)"]
+        ],
+        dark: [
+            ["rgba(205,175,205,.34)", "rgba(222,194,135,.62)"],
+            ["rgba(160,195,215,.34)", "rgba(210,185,130,.62)"],
+            ["rgba(175,205,175,.34)", "rgba(210,185,145,.62)"],
+            ["rgba(195,170,210,.34)", "rgba(215,190,140,.62)"]
+        ]
+    };
+
+    function createFlower() {
+        const el = document.createElement("div");
+        el.className = "particle";
+
+        const flower = document.createElement("div");
+        flower.className = "flower";
+
+        const bright = isBrightTime();
+        const palette = bright ? flowerColors.bright : flowerColors.dark;
+        const colors = palette[Math.floor(Math.random() * palette.length)];
+
+        const petalCount = 5 + Math.floor(Math.random() * 5); // 5～9片
+        const size = 17 + Math.random() * 13;
+        const petalW = 5 + size * .20;
+        const petalH = 8 + size * .34;
+        const radius = size * .24;
+        const centerSize = Math.max(4, size * .22);
+
+        flower.style.setProperty("--petal-w", petalW + "px");
+        flower.style.setProperty("--petal-h", petalH + "px");
+        flower.style.setProperty("--flower-radius", radius + "px");
+        flower.style.setProperty("--center-size", centerSize + "px");
+        flower.style.setProperty("--flower-color", colors[0]);
+        flower.style.setProperty("--center-color", colors[1]);
+        flower.style.setProperty("--flower-glow", bright ? "rgba(255,230,240,.16)" : "rgba(220,200,230,.08)");
+        flower.style.setProperty("--center-glow", bright ? "rgba(255,225,160,.22)" : "rgba(220,190,130,.10)");
+
+        for (let i = 0; i < petalCount; i++) {
+            const petal = document.createElement("span");
+            petal.className = "flower-petal";
+            petal.style.setProperty("--angle", (i * 360 / petalCount) + "deg");
+            flower.appendChild(petal);
+        }
+
+        const center = document.createElement("span");
+        center.className = "flower-center";
+        flower.appendChild(center);
+
+        const duration = 9 + Math.random() * 12;
+        const drift = (Math.random() - .5) * 260;
+        const rotation = (Math.random() - .5) * 720;
+        const opacity = (bright ? .34 : .20) + Math.random() * (bright ? .32 : .22);
+
+        el.style.left = Math.random() * 100 + "vw";
+        el.style.setProperty("--drift", drift + "px");
+        el.style.setProperty("--rotate", rotation + "deg");
+        el.style.setProperty("--opacity", opacity);
+        el.style.animationDuration = duration + "s";
+        el.appendChild(flower);
+        particles.appendChild(el);
+
+        setTimeout(() => el.remove(), duration * 1000 + 300);
+    }
+
+    // 初始少量花朵，避免打开页面瞬间过满。
+    for (let i = 0; i < 14; i++) {
+        setTimeout(createFlower, Math.random() * 8000);
+    }
+
+    setInterval(createFlower, 850);
+
+})();
+</script>
+</body>
+</html>
